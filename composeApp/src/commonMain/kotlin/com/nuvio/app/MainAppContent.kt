@@ -1349,6 +1349,22 @@ internal fun MainAppContent(
                                     }
                                 },
                                 onDownloadsClick = { navController.navigate(DownloadsRoute(downloadsTitle)) },
+                                onTvStreamClick = { url, title, channelId ->
+                                    val launch = PlayerLaunch(
+                                        profileId = activePlaybackProfileId,
+                                        title = title,
+                                        sourceUrl = url,
+                                        streamTitle = title,
+                                        providerName = "TvVoo",
+                                        providerAddonId = "tvvoo",
+                                        contentType = "tv",
+                                        videoId = channelId,
+                                        parentMetaId = channelId,
+                                        parentMetaType = "tv",
+                                    )
+                                    val launchId = PlayerLaunchStore.put(launch)
+                                    navController.navigate(PlayerRoute(launchId = launchId, title = title))
+                                },
                                 onContinueWatchingClick = onContinueWatchingClick,
                                 onContinueWatchingLongPress = onContinueWatchingLongPress,
                                 onSwitchProfile = onSwitchProfile,
