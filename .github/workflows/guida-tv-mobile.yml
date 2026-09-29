@@ -1,0 +1,33 @@
+name: Nuvio Mobile Guida TV APK
+on:
+  push:
+    branches: [guida-tv-mobile]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v6
+      - name: Configura backend Nuvio
+        run: |
+          cat > local.properties <<'EOF'
+          NUVIO_SUPABASE_URL=https://api.nuvio.tv
+          NUVIO_SUPABASE_ANON_KEY=sb_publishable_1Clq8rlTVACkdcZuqr6_AD__xUUC_EN
+          NUVIO_SUPABASE_FALLBACK_URL=
+          EOF
+      - name: Build mobile Full Debug
+        run: ./gradlew :androidApp:assembleFullDebug -Pnuvio.android.distribution=full -Pnuvio.ios.distribution=appstore --stacktrace
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nuvio-Mobile-GuidaTV
+          path: androidApp/build/outputs/apk/full/debug/androidApp-full-debug.apk
+          if-no-files-found: error
+          retention-days: 30
