@@ -9,16 +9,21 @@ import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLDecoder
 import java.text.Normalizer
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.zip.GZIPInputStream
 
 private data class TvEpgProgramme(val title:String,val description:String?,val start:Long,val end:Long)
 private val TV_EPG_URLS=listOf(
  "https://iptv-org.github.io/epg/guides/it/guidatv.sky.it.epg.xml",
- "https://iptv-org.github.io/epg/guides/it/mediaset.it.epg.xml"
+ "https://iptv-org.github.io/epg/guides/it/mediaset.it.epg.xml",
+ "https://www.open-epg.com/files/unitedkingdom.xml.gz",
+ "https://epgshare01.online/epgshare01/epg_ripper_UK1.xml.gz",
+ "https://epg.pw/xmltv/epg_GB.xml.gz"
 )
 
 private fun configuredEpgUrls():List<String>{
@@ -65,7 +70,8 @@ internal actual suspend fun resolveTvVooEpgDescription(channelName:String):Strin
 private fun readEpg(source:String,wanted:String):List<TvEpgProgramme>{
  val connection=(URL(source).openConnection() as HttpURLConnection).apply{connectTimeout=8000;readTimeout=12000;setRequestProperty("User-Agent","NuvioMobile/EPG")}
  try{
-  connection.inputStream.use{input->
+  val epgInput=if(source.endsWith(".gz",ignoreCase=true))GZIPInputStream(connection.inputStream)else connection.inputStream
+  epgInput.use{input->
    val parser=XmlPullParserFactory.newInstance().newPullParser().apply{setInput(input,"UTF-8")}
    val channelNames=mutableMapOf<String,String>(); val out=mutableListOf<TvEpgProgramme>()
    var event=parser.eventType; var channelId:String?=null; var programmeChannel:String?=null
@@ -107,5 +113,17 @@ private fun parseEpgTime(value:String?):Long?{
  }
  return null
 }
-private fun normalizeEpgName(value:String):String=Normalizer.normalize(value,Normalizer.Form.NFD).replace(Regex("\\p{M}+"),"").lowercase(Locale.ROOT).replace("&"," e ").replace(Regex("\\b(hd|uhd|4k|fhd|italia|it)\\b")," ").replace(Regex("[^a-z0-9]+")," ").trim()
-private fun epgNamesMatch(a:String,b:String):Boolean=a==b||a.contains(b)||b.contains(a)
+private fun normalizeEpgName(value:String):String{
+ val decoded=runCatching{URLDecoder.decode(value,"UTF-8")}.getOrDefault(value)
+ var x=Normalizer.normalize(decoded,Normalizer.Form.NFD).replace(Regex("\\p{M}+"),"").lowercase(Locale.ROOT)
+ x=x.replace("&"," and ").replace("+"," plus ")
+ x=x.replace(Regex("\\b(vavoo|group|uk|united kingdom|italia|it)\\b")," ")
+  .replace(Regex("\\((backup( \\d+)?|hd|uhd|4k|fhd|hevc|h265)\\)")," ")
+  .replace(Regex("\\[[^]]*]")," ")
+  .replace(Regex("\\b(backup|hd|uhd|4k|fhd|hevc|h265)\\b")," ")
+  .replace(Regex("\\bsport\\b"),"sports")
+  .replace(Regex("\\bscifi\\b"),"sci fi")
+  .replace(Regex("\\bmovies\\b"),"cinema")
+ return x.replace(Regex("[^a-z0-9]+")," ").trim()
+}
+private fun epgNamesMatch(a:String,b:String):Boolean{val x=a.replace(" ","");val y=b.replace(" ","");return a==b||a.contains(b)||b.contains(a)||x==y||(x.length>=5&&y.length>=5&&(x.endsWith(y)||y.endsWith(x)))}
