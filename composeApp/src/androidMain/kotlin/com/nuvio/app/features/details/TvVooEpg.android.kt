@@ -1,5 +1,8 @@
 package com.nuvio.app.features.details
 
+import android.app.Application
+import android.content.Context
+import org.json.JSONArray
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.xmlpull.v1.XmlPullParser
@@ -18,9 +21,29 @@ private val TV_EPG_URLS=listOf(
  "https://iptv-org.github.io/epg/guides/it/mediaset.it.epg.xml"
 )
 
+private fun configuredEpgUrls():List<String>{
+ val automatic=TV_EPG_URLS
+ val app=runCatching{Class.forName("android.app.ActivityThread").getMethod("currentApplication").invoke(null) as? Application}.getOrNull()
+     ?:return automatic
+ val raw=app.getSharedPreferences("nuvio_tvguide_epg",Context.MODE_PRIVATE).getString("sources","[]").orEmpty()
+ val manual=runCatching{
+  val a=JSONArray(raw)
+  buildList{
+   for(i in 0 until a.length()){
+    val o=a.optJSONObject(i)?:continue
+    if(o.optBoolean("enabled",true)){
+     val url=o.optString("url")
+     if(url.startsWith("http"))add(url)
+    }
+   }
+  }
+ }.getOrDefault(emptyList())
+ return (automatic+manual).distinct()
+}
+
 internal actual suspend fun resolveTvVooEpgDescription(channelName:String):String?=withContext(Dispatchers.IO){
  val wanted=normalizeEpgName(channelName); val now=System.currentTimeMillis()
- for(source in TV_EPG_URLS){
+ for(source in configuredEpgUrls()){
   val programmes=runCatching{readEpg(source,wanted)}.getOrDefault(emptyList()).sortedBy{it.start}
   val index=programmes.indexOfFirst{it.start<=now&&it.end>now}
   if(index>=0){
