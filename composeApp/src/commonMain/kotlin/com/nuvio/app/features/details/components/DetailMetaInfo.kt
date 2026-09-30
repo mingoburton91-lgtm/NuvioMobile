@@ -25,7 +25,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,6 +43,7 @@ import com.nuvio.app.core.build.AppFeaturePolicy
 import com.nuvio.app.core.ui.nuvioHorizontalScrollBleed
 import com.nuvio.app.features.details.MetaDetails
 import com.nuvio.app.features.details.MetaExternalRating
+import com.nuvio.app.features.details.resolveTvVooEpgDescription
 import com.nuvio.app.features.details.formatRuntimeForDisplay
 import com.nuvio.app.features.details.formatMetaReleaseLineForDetails
 import com.nuvio.app.features.mdblist.MdbListMetadataService.PROVIDER_AUDIENCE
@@ -163,10 +168,20 @@ fun DetailMetaInfo(
             )
         }
 
-        if (!meta.description.isNullOrBlank()) {
+        val isTvVooChannel = remember(meta.id, meta.type, meta.description) {
+            meta.id.contains("vavoo", ignoreCase = true) ||
+                meta.id.contains("tvvoo", ignoreCase = true) ||
+                (meta.description?.contains("🔴") == true && meta.description?.contains("➡️") == true)
+        }
+        var epgDescription by remember(meta.id) { mutableStateOf<String?>(null) }
+        LaunchedEffect(meta.id, meta.name, isTvVooChannel) {
+            epgDescription = if (isTvVooChannel) resolveTvVooEpgDescription(meta.name) else null
+        }
+        val displayedDescription = epgDescription ?: meta.description
+        if (!displayedDescription.isNullOrBlank()) {
             ExpandableDescription(
-                text = meta.description,
-                collapsedMaxLines = 3,
+                text = displayedDescription,
+                collapsedMaxLines = 5,
                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
             )
         }
